@@ -2,8 +2,13 @@
 
 Output: ``data/bdu.sqlite`` (unversioned) and ``data/bdu.sqlite.gz`` (committed).
 
+Threats (БнД УБИ) are loaded from the FSTEC ``thrlist.xlsx`` export
+(requires the ``openpyxl`` package); pass ``--no-xlsx`` to build a
+vulnerabilities-only database.
+
 Usage:
     python scripts/build_db.py --xml data/vulxml.xml.gz \
+                               --xlsx data/thrlist.xlsx \
                                --db data/bdu.sqlite \
                                --snapshot-date 2026-04-18
 """
@@ -11,6 +16,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import datetime as dt
 import gzip
 import shutil
 import sqlite3
@@ -81,9 +87,35 @@ CREATE TABLE cwes (
     PRIMARY KEY (bdu_id, cwe_id)
 );
 
+CREATE TABLE threats (
+    rowid           INTEGER PRIMARY KEY,
+    id              TEXT NOT NULL UNIQUE,   -- УБИ.1
+    num             INTEGER NOT NULL,       -- 1
+    name            TEXT NOT NULL,
+    description     TEXT,
+    source          TEXT,     -- источник угрозы (потенциал нарушителя)
+    object          TEXT,     -- объект воздействия
+    confidentiality INTEGER NOT NULL DEFAULT 0,
+    integrity       INTEGER NOT NULL DEFAULT 0,
+    availability    INTEGER NOT NULL DEFAULT 0,
+    added_date      TEXT,     -- DD.MM.YYYY
+    last_upd_date   TEXT,
+    status          TEXT,     -- Опубликована / Архивная
+    remarks         TEXT
+);
+CREATE INDEX idx_thr_status ON threats(status);
+CREATE INDEX idx_thr_num    ON threats(num);
+
 CREATE VIRTUAL TABLE vulnerabilities_fts USING fts5(
     name, description, software_names, vendors, cves_joined,
     content = "vulnerabilities",
+    content_rowid = "rowid",
+    tokenize = "unicode61 remove_diacritics 2"
+);
+
+CREATE VIRTUAL TABLE threats_fts USING fts5(
+    name, description, source, object,
+    content = "threats",
     content_rowid = "rowid",
     tokenize = "unicode61 remove_diacritics 2"
 );
@@ -93,6 +125,107 @@ CREATE TABLE metadata (
     value TEXT
 );
 """
+
+# thrlist.xlsx header row: exact FSTEC column titles → threats table columns.
+THR_COLUMNS = {
+    "идентификатор уби": "num",
+    "наименование уби": "name",
+    "описание": "description",
+    "источник угрозы (характеристика и потенциал нарушителя)": "source",
+    "объект воздействия": "object",
+    "нарушение конфиденциальности": "confidentiality",
+    "нарушение целостности": "integrity",
+    "нарушение доступности": "availability",
+    "дата включения угрозы в бнд уби": "added_date",
+    "дата последнего изменения данных": "last_upd_date",
+    "статус угрозы": "status",
+    "замечания": "remarks",
+}
+
+# Max rows scanned while looking for the header line (a merged banner row
+# precedes it, and FSTEC occasionally pads the top of the sheet).
+THR_HEADER_SCAN_ROWS = 5
+
+
+def _thr_date(value: object) -> str:
+    """Normalize a cell that should hold a date into DD.MM.YYYY."""
+    if isinstance(value, dt.datetime):
+        return value.strftime("%d.%m.%Y")
+    if isinstance(value, dt.date):
+        return value.strftime("%d.%m.%Y")
+    return str(value).strip() if value is not None else ""
+
+
+def _thr_text(value: object) -> str:
+    """String cell cleanup: FSTEC exports encode CR/LF as ``_x000D_``/``_x000A_``
+    literals, which sit next to real newlines — drop them."""
+    text = str(value) if value is not None else ""
+    return text.replace("_x000D_", "").replace("_x000A_", "\n").strip()
+
+
+def _thr_flag(value: object) -> int:
+    return 1 if value in (1, True, "1", "да", "Да") else 0
+
+
+def parse_threats(xlsx_path: Path) -> list[tuple]:
+    """Read the БнД УБИ export and return rows for the ``threats`` table."""
+    try:
+        from openpyxl import load_workbook
+    except ImportError as exc:  # pragma: no cover - environment issue
+        raise SystemExit(
+            f"--xlsx needs the openpyxl package (pip install openpyxl): {exc}"
+        ) from exc
+
+    wb = load_workbook(xlsx_path, read_only=True, data_only=True)
+    ws = wb.active
+
+    header_row_idx = None
+    columns: dict[str, int] = {}
+    for i, row in enumerate(
+        ws.iter_rows(max_row=THR_HEADER_SCAN_ROWS, values_only=True), start=1
+    ):
+        titles = [
+            str(cell).strip().lower() if cell is not None else "" for cell in row
+        ]
+        matched = {
+            THR_COLUMNS[t]: idx
+            for idx, t in enumerate(titles)
+            if t in THR_COLUMNS
+        }
+        if "num" in matched and "name" in matched:
+            header_row_idx = i
+            columns = matched
+            break
+    if header_row_idx is None:
+        wb.close()
+        raise SystemExit(f"No УБИ header row found in {xlsx_path}")
+
+    rows: list[tuple] = []
+    for row in ws.iter_rows(min_row=header_row_idx + 1, values_only=True):
+        cell = lambda key: row[columns[key]] if key in columns else None  # noqa: E731
+        num = cell("num")
+        name = cell("name")
+        if num is None or not str(name or "").strip():
+            continue
+        rows.append(
+            (
+                f"УБИ.{int(num)}",
+                int(num),
+                _thr_text(name),
+                _thr_text(cell("description")),
+                _thr_text(cell("source")),
+                _thr_text(cell("object")),
+                _thr_flag(cell("confidentiality")),
+                _thr_flag(cell("integrity")),
+                _thr_flag(cell("availability")),
+                _thr_date(cell("added_date")),
+                _thr_date(cell("last_upd_date")),
+                _thr_text(cell("status")),
+                _thr_text(cell("remarks")),
+            )
+        )
+    wb.close()
+    return rows
 
 SEVERITY_MAP = {
     "критический": 4,
@@ -128,7 +261,9 @@ def _text(el: ET.Element | None) -> str:
     return el.text.strip()
 
 
-def build_db(xml_path: Path, db_path: Path, snapshot_date: str) -> int:
+def build_db(
+    xml_path: Path, db_path: Path, snapshot_date: str, xlsx_path: Path | None = None
+) -> tuple[int, int]:
     if db_path.exists():
         db_path.unlink()
     conn = sqlite3.connect(db_path)
@@ -260,6 +395,21 @@ def build_db(xml_path: Path, db_path: Path, snapshot_date: str) -> int:
     conn.execute("INSERT INTO vulnerabilities_fts(vulnerabilities_fts) VALUES('rebuild')")
     conn.execute("INSERT INTO vulnerabilities_fts(vulnerabilities_fts) VALUES('optimize')")
 
+    threat_total = 0
+    if xlsx_path is not None:
+        thr_rows = parse_threats(xlsx_path)
+        conn.executemany(
+            """INSERT INTO threats
+               (id, num, name, description, source, object,
+                confidentiality, integrity, availability,
+                added_date, last_upd_date, status, remarks)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+            thr_rows,
+        )
+        conn.execute("INSERT INTO threats_fts(threats_fts) VALUES('rebuild')")
+        conn.execute("INSERT INTO threats_fts(threats_fts) VALUES('optimize')")
+        threat_total = len(thr_rows)
+
     conn.execute(
         "INSERT INTO metadata(key, value) VALUES ('snapshot_date', ?)",
         (snapshot_date,),
@@ -269,12 +419,16 @@ def build_db(xml_path: Path, db_path: Path, snapshot_date: str) -> int:
         (str(total),),
     )
     conn.execute(
-        "INSERT INTO metadata(key, value) VALUES ('schema_version', '3')",
+        "INSERT INTO metadata(key, value) VALUES ('threats_total', ?)",
+        (str(threat_total),),
+    )
+    conn.execute(
+        "INSERT INTO metadata(key, value) VALUES ('schema_version', '4')",
     )
     conn.commit()
     conn.execute("VACUUM")
     conn.close()
-    return total
+    return total, threat_total
 
 
 def gzip_file(src: Path, dst: Path) -> None:
@@ -285,6 +439,17 @@ def gzip_file(src: Path, dst: Path) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--xml", type=Path, default=Path("data/vulxml.xml.gz"))
+    parser.add_argument(
+        "--xlsx",
+        type=Path,
+        default=Path("data/thrlist.xlsx"),
+        help="thrlist.xlsx with БнД УБИ threats (skipped if missing).",
+    )
+    parser.add_argument(
+        "--no-xlsx",
+        action="store_true",
+        help="Do not load threats even if the xlsx file exists.",
+    )
     parser.add_argument("--db", type=Path, default=Path("data/bdu.sqlite"))
     parser.add_argument(
         "--snapshot-date",
@@ -298,9 +463,19 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    total = build_db(args.xml, args.db, args.snapshot_date)
+    xlsx_path = None
+    if not args.no_xlsx:
+        if args.xlsx.exists():
+            xlsx_path = args.xlsx
+        else:
+            print(f"Warning: {args.xlsx} not found, building without threats.")
+
+    total, threat_total = build_db(args.xml, args.db, args.snapshot_date, xlsx_path)
     size_mb = args.db.stat().st_size / 1e6
-    print(f"Built {args.db}: {total} vulnerabilities, {size_mb:.1f} MB")
+    print(
+        f"Built {args.db}: {total} vulnerabilities, "
+        f"{threat_total} threats, {size_mb:.1f} MB"
+    )
 
     if not args.no_gzip:
         gz_path = args.db.with_suffix(args.db.suffix + ".gz")

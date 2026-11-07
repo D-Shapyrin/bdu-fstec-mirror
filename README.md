@@ -41,6 +41,9 @@ sqlite3 bdu.sqlite "SELECT id, name FROM vulnerabilities WHERE identify_year=202
 ```bash
 # Поиск по FTS5 (с токенизацией кириллицы и ранжированием BM25)
 sqlite3 bdu.sqlite "SELECT v.id, substr(v.name,1,80) FROM vulnerabilities_fts f JOIN vulnerabilities v ON v.rowid=f.rowid WHERE vulnerabilities_fts MATCH 'Astra Linux' ORDER BY rank LIMIT 5;"
+
+# Угрозы из БнД УБИ (идентификаторы УБИ.N, нарушение К/Ц/Д)
+sqlite3 bdu.sqlite "SELECT id, name FROM threats WHERE integrity=1 AND confidentiality=1 AND status='Опубликована' LIMIT 5;"
 ```
 
 ### Python (XML)
@@ -66,7 +69,9 @@ with urllib.request.urlopen(url) as r, gzip.open(r) as f:
 - `cwes` (`bdu_id`, `cwe_id`) — привязка к типам уязвимостей.
 - `software` (`bdu_id`, `name`, `vendor`, `version`) — уязвимое ПО.
 - `vulnerabilities_fts` — FTS5-индекс (external content) по полям `name`, `description`, `software_names`, `vendors`, `cves_joined`. Токенизатор `unicode61 remove_diacritics 2`.
-- `metadata` (`key`, `value`) — `snapshot_date`, `total`, `schema_version`.
+- `threats` — угрозы из БнД УБИ (Банка данных угроз ФСТЭК, `thrlist.xlsx`). Колонки: `id` (`УБИ.1`), `num`, `name`, `description`, `source` (характеристика и потенциал нарушителя), `object` (объект воздействия), `confidentiality`/`integrity`/`availability` (0/1 — нарушение К/Ц/Д), `added_date`, `last_upd_date`, `status` (Опубликована / Архивная), `remarks`.
+- `threats_fts` — FTS5-индекс по полям `name`, `description`, `source`, `object`.
+- `metadata` (`key`, `value`) — `snapshot_date`, `total`, `threats_total`, `schema_version`.
 
 Composite-индексы для типовых фильтров:
 
@@ -76,11 +81,12 @@ Composite-индексы для типовых фильтров:
 
 ## Автоматическая пересборка
 
-`data/bdu.sqlite.gz` и `data/stats.json` пересобираются GitHub Action `.github/workflows/build-db.yml` каждый раз, когда меняется `data/vulxml.xml.gz` или `scripts/build_db.py`. Ручная сборка:
+`data/bdu.sqlite.gz` и `data/stats.json` пересобираются GitHub Action `.github/workflows/build-db.yml` каждый раз, когда меняется `data/vulxml.xml.gz` или `scripts/build_db.py`. Ручная сборка (для `thrlist.xlsx` нужен пакет `openpyxl`):
 
 ```bash
 python scripts/build_db.py \
   --xml data/vulxml.xml.gz \
+  --xlsx data/thrlist.xlsx \
   --db data/bdu.sqlite \
   --snapshot-date 2026-04-18
 ```

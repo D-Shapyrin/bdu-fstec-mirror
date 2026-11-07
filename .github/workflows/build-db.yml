@@ -24,6 +24,9 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Install build dependencies
+        run: pip install --quiet openpyxl
+
       - name: Determine snapshot date
         id: snap
         run: echo "date=$(date -u '+%Y-%m-%d %H:%M')" >> "$GITHUB_OUTPUT"
@@ -42,6 +45,9 @@ jobs:
           db = pathlib.Path("data/bdu.sqlite")
           conn = sqlite3.connect(db)
           total = conn.execute("SELECT value FROM metadata WHERE key='total'").fetchone()[0]
+          threats_total = conn.execute(
+              "SELECT value FROM metadata WHERE key='threats_total'"
+          ).fetchone()[0]
           first = conn.execute("SELECT id FROM vulnerabilities ORDER BY id LIMIT 1").fetchone()[0]
           last = conn.execute("SELECT id FROM vulnerabilities ORDER BY id DESC LIMIT 1").fetchone()[0]
           latest = conn.execute(
@@ -53,6 +59,7 @@ jobs:
           stats_path = pathlib.Path("data/stats.json")
           stats = json.loads(stats_path.read_text())
           stats["total_vulnerabilities"] = int(total)
+          stats["total_threats"] = int(threats_total)
           stats["first_id"] = first
           stats["last_id"] = last
           # ``last_update`` keeps the human-readable source-side date in DD.MM.YYYY HH:MM.
@@ -67,7 +74,7 @@ jobs:
           stats["artifacts"]["sqlite_gz"] = {
               "path": "data/bdu.sqlite.gz",
               "size_bytes": pathlib.Path("data/bdu.sqlite.gz").stat().st_size,
-              "schema_version": 3,
+              "schema_version": 4,
               "format": "gzip(SQLite with FTS5)",
           }
           stats_path.write_text(json.dumps(stats, indent=2, ensure_ascii=False) + "\n")
