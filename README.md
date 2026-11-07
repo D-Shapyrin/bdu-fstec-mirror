@@ -99,13 +99,13 @@ XML-источник надо качать с IP российского реги
 
 ```bash
 # С RU-машины
-curl -o vulxml.xml https://bdu.fstec.ru/files/documents/vulxml.xml
-curl -o vullist.xlsx https://bdu.fstec.ru/files/documents/vullist.xlsx
-curl -o thrlist.xlsx https://bdu.fstec.ru/files/documents/thrlist.xlsx
-gzip -9 vulxml.xml
+curl --fail --location -k -o vulxml.zip https://bdu.fstec.ru/files/documents/vulxml.zip
+curl --fail --location -k -o vullist.xlsx https://bdu.fstec.ru/files/documents/vullist.xlsx
+curl --fail --location -k -o thrlist.xlsx https://bdu.fstec.ru/files/documents/thrlist.xlsx
+unzip -p vulxml.zip export/vulxml.xml | gzip -9 > vulxml.xml.gz
 
 git add data/vulxml.xml.gz data/vullist.xlsx data/thrlist.xlsx
-git commit -m "data: snapshot YYYY-MM-DD"
+git commit -m "data: snapshot $(date '+%Y-%m-%d %H:%M')"
 git push
 # SQLite пересоберётся автоматически через GitHub Action.
 ```

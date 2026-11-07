@@ -26,7 +26,7 @@ jobs:
 
       - name: Determine snapshot date
         id: snap
-        run: echo "date=$(date -u +%Y-%m-%d)" >> "$GITHUB_OUTPUT"
+        run: echo "date=$(date -u +%Y-%m-%d %H:%M)" >> "$GITHUB_OUTPUT"
 
       - name: Build SQLite snapshot
         run: |
@@ -55,7 +55,7 @@ jobs:
           stats["total_vulnerabilities"] = int(total)
           stats["first_id"] = first
           stats["last_id"] = last
-          # ``last_update`` keeps the human-readable source-side date in DD.MM.YYYY.
+          # ``last_update`` keeps the human-readable source-side date in DD.MM.YYYY HH:MM.
           stats["last_update"] = latest
           stats["snapshot_date"] = "${{ steps.snap.outputs.date }}"
           stats.setdefault("artifacts", {})
