@@ -3,7 +3,7 @@
   "first_id": "BDU:2014-00001",
   "last_id": "BDU:2026-18543",
   "last_update": "06.11.2026",
-  "snapshot_date": "2026-11-07 13:22",
+  "snapshot_date": "2026-11-07 15:22",
   "source": "https://bdu.fstec.ru/vul",
   "artifacts": {
     "xml_gz": {
@@ -13,7 +13,7 @@
     },
     "sqlite_gz": {
       "path": "data/bdu.sqlite.gz",
-      "size_bytes": 59431920,
+      "size_bytes": 59434228,
       "schema_version": 3,
       "format": "gzip(SQLite with FTS5)"
     },
