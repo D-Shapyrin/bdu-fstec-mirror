@@ -3,7 +3,7 @@
   "first_id": "BDU:2014-00001",
   "last_id": "BDU:2026-18543",
   "last_update": "06.11.2026",
-  "snapshot_date": "2026-11-07 15:22",
+  "snapshot_date": "2026-11-07 21:49",
   "source": "https://bdu.fstec.ru/vul",
   "artifacts": {
     "xml_gz": {
@@ -13,8 +13,8 @@
     },
     "sqlite_gz": {
       "path": "data/bdu.sqlite.gz",
-      "size_bytes": 59434228,
-      "schema_version": 3,
+      "size_bytes": 59568371,
+      "schema_version": 4,
       "format": "gzip(SQLite with FTS5)"
     },
     "xlsx_vuls": {
@@ -25,5 +25,6 @@
       "path": "data/thrlist.xlsx",
       "format": "XLSX"
     }
-  }
+  },
+  "total_threats": 227
 }
