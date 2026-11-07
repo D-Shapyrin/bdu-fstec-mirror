@@ -1,8 +1,8 @@
 # bdu-fstec-mirror — БДУ ФСТЭК скачать без геоблока
 
-[![Snapshot](https://img.shields.io/badge/snapshot-2026--04--18-informational)](data/stats.json)
-[![Vulnerabilities](https://img.shields.io/badge/vulnerabilities-86%2C664-success)](data/stats.json)
-[![BDU range](https://img.shields.io/badge/BDU-2014--00001%20%E2%86%92%202026--05547-blue)](data/stats.json)
+[![Snapshot](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2Fvelvetway%2Fbdu-fstec-mirror%2Fmain%2Fdata%2Fstats.json&query=%24.snapshot_date&label=snapshot&color=informational)](data/stats.json)
+[![Vulnerabilities](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2Fvelvetway%2Fbdu-fstec-mirror%2Fmain%2Fdata%2Fstats.json&query=%24.total_vulnerabilities&label=vulnerabilities&color=success)](data/stats.json)
+[![BDU range](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2Fvelvetway%2Fbdu-fstec-mirror%2Fmain%2Fdata%2Fstats.json&query=%24%5B%27first_id%27%2C%27last_id%27%5D&label=BDU&color=blue)](data/stats.json)
 [![Source](https://img.shields.io/badge/source-bdu.fstec.ru-lightgrey)](https://bdu.fstec.ru/vul)
 [![License: MIT](https://img.shields.io/badge/license-MIT-yellow.svg)](LICENSE)
 

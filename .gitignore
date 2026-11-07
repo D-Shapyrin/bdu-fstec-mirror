@@ -8,3 +8,4 @@ __pycache__/
 data/bdu.sqlite
 data/bdu.sqlite-wal
 data/bdu.sqlite-shm
+data/vulxml.zip
